@@ -1,0 +1,10 @@
+- JJ/MM/AAAA-[Trigramme] : Idée
+
+-
+
+-----BUG-----
+
+- JJ/MM/AAAA-[Trigramme] : Problème
+
+- 08/11/2024-ASK : Artefact dossiers supprimés
+-
