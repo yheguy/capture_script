@@ -11,13 +11,45 @@ public class KeyboardListener {
 "@
 
 # Initialisation des chemins
+$scriptPath = $PSScriptRoot
+$global:logDirectoryPath = Join-Path -Path $scriptPath -ChildPath "log"
 $global:sourceCapturePath = "C:\Users\YHEGUY\capture"
 $global:captureDestinationDirectoryPath = "C:\Users\YHEGUY\ticket"
 $global:captureDestinationPath = $global:captureDestinationDirectoryPath
 
 # check si le dossier existe si non le créé
-if (!(Test-Path -Path $global:captureDestinationPath)) {
-    New-Item -ItemType Directory -Path $global:captureDestinationPath
+function Test-DirectoryAndCreate{
+    param (
+        [string]$path
+    )
+    try {
+        if (!(Test-Path -Path $path)) {
+            New-Item -ItemType Directory -Path $path
+            Write-Log -message "Fichier $path crée" -level "INFO"
+        }
+    }
+    catch {
+        Write-Log -message $_.Exception.Message -level "ERROR"
+    }
+    
+}
+
+# Fonction pour uniformiser les logs
+function Write-Log {
+    param (
+        [string]$message,
+        [string]$level = "INFO"
+    )
+    $date = Get-Date -Format "yyyy-MM-dd"
+    $logFilePath = Join-Path -Path $global:logDirectoryPath -ChildPath "$date.log"
+    
+    if (!(Test-Path -Path $logFilePath)) {
+        New-Item -ItemType File -Path $logFilePath
+    }
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - [$level] - $message"
+    Add-Content -Path $logFilePath -Value $logMessage
 }
 
 # Pop-up avec un champs a remplir pour dire dans quel dossier mettre les captures
@@ -50,32 +82,40 @@ function Show-InputDialog {
 
 # Déplace les fichiers ayant le meme format que les captures
 Function Move-ScreenshotToDirectory {
-    Get-ChildItem -Path $global:sourceCapturePath | ForEach-Object {
+    Get-ChildItem -Path $global:sourceCapturePath | ForEach-Object -Process {
         if (-not(Test-Path $_ -PathType Container)) {
             if ($_ -match "\d{4}-\d{2}-\d{2} " -and $_.Extension -eq ".png") {
                 if ($_.CreationTime -lt (Get-Date).AddSeconds(-2)) {
-                    Move-Item $_ -Destination $global:captureDestinationPath
+                    try {
+                        Move-Item $_ -Destination $global:captureDestinationPath
+                        Write-Log -message "fichier $($_.FullName) déplacé dans $global:captureDestinationPath"
+                    }
+                    catch {
+                        Write-Log -message $_.Exception.Message -level "ERROR"
+                    }
                 }
             }
         }
     }
 }
 
+Test-DirectoryAndCreate -path $logDirectoryPath
+Test-DirectoryAndCreate -path $global:captureDestinationPath
+
 # Boucle à l'infini
 while ($true) {
     Start-Sleep -Milliseconds 100
     # "ctrl"+"maj"+"+"
     if ([KeyboardListener]::GetAsyncKeyState(0x11) -and [KeyboardListener]::GetAsyncKeyState(0x10) -and [KeyboardListener]::GetAsyncKeyState(0xBB)) {
-        $inputText = Show-InputDialog
-        if ($inputText) {
+        try {
+            $inputText = Show-InputDialog
             $global:captureDestinationPath = "$global:captureDestinationDirectoryPath\$inputText"
-            
-            # check si le dossier existe si non le créé
-            if (!(Test-Path -Path $global:captureDestinationPath)) {
-                New-Item -ItemType Directory -Path $global:captureDestinationPath
-            }
-        }
-    }
 
+            Test-DirectoryAndCreate -path $global:captureDestinationPath
+        }
+        catch {
+            Write-Log -message $_.Exception.Message -level "ERROR"
+        }  
+    }
     Move-ScreenshotToDirectory
 }
